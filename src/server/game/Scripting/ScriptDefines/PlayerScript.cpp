@@ -19,6 +19,7 @@
 #include "ScriptMgr.h"
 #include "ScriptMgrMacros.h"
 #include "World.h"
+#include "Chat.h"
 
 #include <algorithm>
 
@@ -214,6 +215,10 @@ void ScriptMgr::OnPlayerUpdate(Player* player, uint32 p_time)
 
 void ScriptMgr::OnPlayerLogin(Player* player)
 {
+    ChatHandler(player->GetSession()).PSendSysMessage(
+        "Hola {} desde C++",
+        player->GetName()
+    );
     CALL_ENABLED_HOOKS(PlayerScript, PLAYERHOOK_ON_LOGIN, script->OnPlayerLogin(player));
 }
 
