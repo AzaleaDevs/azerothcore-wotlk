@@ -1,0 +1,10 @@
+{
+  "core_base": "e72b2219697d098f861e91d6c52064bfe20644c9",
+  "modules": [
+    {
+      "path": "modules/mod-ale",
+      "url": "https://github.com/azerothcore/mod-ale.git",
+      "commit": "bd74eae623ca63154d3eb49e1d187e872ef13370"
+    }
+  ]
+}
