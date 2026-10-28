@@ -81,6 +81,7 @@ ARG CACHEBUST=1
 WORKDIR /azerothcore/build
 
 RUN --mount=type=cache,target=/ccache,sharing=locked \
+    --mount=type=cache,id=azalea-acore-ninja,target=/azerothcore/build,sharing=locked \
     # This may seem silly (and it is), but AzerothCore wants the git repo at
     # build time. The git repo is _huge_ and it's not something that really
     # makes sense to mount into the container, but this way we can let the build
