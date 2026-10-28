@@ -24,6 +24,8 @@ frame:SetBackdrop({ bgFile = 'Interface\\DialogFrame\\UI-DialogBox-Background',
   edgeFile = 'Interface\\DialogFrame\\UI-DialogBox-Border', tile = true, tileSize = 32,
   edgeSize = 32, insets = { left = 11, right = 12, top = 12, bottom = 11 } })
 frame:Hide()
+frame:SetScript('OnShow', function() PlaySound('igMainMenuOpen') end)
+frame:SetScript('OnHide', function() PlaySound('igMainMenuClose') end)
 table.insert(UISpecialFrames, 'AzaleaDailyRewardsFrame')
 
 local title = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalLarge')
@@ -102,6 +104,20 @@ SLASH_AZALEADAILY1 = '/diarias'
 SLASH_AZALEADAILY2 = '/dailyrewards'
 SlashCmdList.AZALEADAILY = AzaleaDailyRewards_Toggle
 
+local minimapButton = CreateFrame('Button', 'AzaleaDailyRewardsMinimap', Minimap)
+minimapButton:SetSize(32, 32)
+minimapButton:SetPoint('TOPLEFT', Minimap, 'TOPLEFT', -3, -40)
+minimapButton:SetNormalTexture(MONEY_ICON)
+minimapButton:SetHighlightTexture('Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight')
+minimapButton:SetScript('OnClick', function() AzaleaDailyRewards_Toggle() end)
+minimapButton:SetScript('OnEnter', function(self)
+  GameTooltip:SetOwner(self, 'ANCHOR_LEFT')
+  GameTooltip:SetText('Recompensas diarias')
+  GameTooltip:AddLine('Clic para abrir o cerrar', 1, 1, 1)
+  GameTooltip:Show()
+end)
+minimapButton:SetScript('OnLeave', function() GameTooltip:Hide() end)
+
 local events = CreateFrame('Frame')
 events:RegisterEvent('PLAYER_LOGIN')
 events:RegisterEvent('CHAT_MSG_ADDON')
@@ -125,7 +141,14 @@ events:SetScript('OnEvent', function(_, event, ...)
     if day < 1 or day > 14 then return end
     state.day, state.claimed, state.ready, state.error = day, claimed == '1', true, nil
   elseif message:match('^ERROR|') then
-    state.ready, state.error = false, message:sub(7)
+    local errorCode = message:sub(7)
+    if errorCode == 'money_limit' then
+      state.ready, state.error = false, 'Superarias el limite de oro. Reduce tu oro y vuelve a intentarlo.'
+    elseif errorCode == 'inventory_full' then
+      state.ready, state.error = false, 'No hay espacio para el orbe. Libera una casilla y vuelve a intentarlo.'
+    else
+      state.ready, state.error = false, 'Servicio no disponible. Vuelve a intentarlo mas tarde.'
+    end
   else return end
   refresh()
 end)

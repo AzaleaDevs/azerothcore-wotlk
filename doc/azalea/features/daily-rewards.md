@@ -1,85 +1,111 @@
-# Recompensas diarias / Daily rewards — trabajo en curso
+# Recompensas diarias / Daily rewards
 
-## Español
+## Espanol
 
-**Estado: incompleto. No instalar, integrar en `server` ni usar con personajes reales.**
-La interfaz y las reglas puras están preparadas, pero falta implementar y probar el servicio
-autoritativo del servidor, persistencia y entrega segura de recompensas. Sin él, el addon solo
-mostrará «Esperando respuesta del servidor». No se han modificado el servidor ni el cliente activos.
+**Estado de desarrollo:** tutorial en pruebas; no integrado ni desplegado. El addon
+y el script ALE permiten una reclamacion por personaje y dia natural de Madrid,
+incluido el cambio de horario. Si se pierde un dia, la racha vuelve al dia 1.
+Los dias 1 a 13 entregan 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 3000,
+5000, 10000 y 20000 de oro. El dia 14 entrega un orbe congelado (43102), que
+se repite cada dia consecutivo. El servidor determina los premios y rechaza el
+oro que supere 2147483646 cobres. Si no hay espacio, no reclama el orbe.
 
-### Requisitos acordados
+### Limites de este tutorial
 
-- Progreso independiente por personaje, una reclamación por día de calendario de Madrid.
-- La medianoche española cambia entre UTC+1 y UTC+2 según horario de verano.
-- Dias 1?13: 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 3000, 5000, 10000 y 20000 de oro, respectivamente. Dia 14: un orbe congelado
-  (`item_template.entry = 43102`, icono `Spell_Frost_FrozenCore`).
-- Si se pierde un día, la siguiente reclamación vuelve al día 1. Tras alcanzar el día 14, se
-  reclama otro orbe cada día consecutivo hasta perder la racha.
-- Ventana central de 14 casillas con un botón de reclamar por casilla; la lógica y autorización
-  de recompensas corresponden exclusivamente al servidor, nunca al addon.
-- `Mayús+F12` solo se asigna si no existe ninguna tecla para la acción y esa combinación está
-  libre; el jugador puede cambiarla en las asignaciones de teclas. `/diarias` también abre la UI.
+Se eligio una implementacion sencilla: ALE entrega el premio en memoria y
+CharDBExecute registra la reclamacion asincronamente. Ambas acciones NO forman
+una transaccion. Un fallo de base de datos, una recarga de Lua o un reinicio
+antes de guardar el personaje o registrar la reclamacion puede perder el premio,
+perder el registro o permitir una repeticion. No usar como sistema economico
+seguro. La cache de la sesion evita los dobles clics durante la escritura pendiente,
+pero no sobrevive a una recarga o un reinicio.
 
-### Archivos
+### Que modificar
 
-- `azalea/client/AzaleaDailyRewards/`: addon cliente 3.3.5a.
-- `azalea/daily-rewards/daily_logic.lua`: reglas puras de calendario y racha.
-- `azalea/daily-rewards/tests/test_daily_logic.lua`: pruebas de las reglas y cambios de horario.
+- En azalea/server/scripts/azalea_daily_rewards.lua, modificar la tabla
+  gold_rewards para los dias 1 a 13, y el ID 43102 y la cantidad en reward para
+  el dia 14. Un oro equivale a 10000 cobres. Este script contiene su copia de
+  las reglas de calendario; daily_logic.lua y sus pruebas son la referencia.
+- En azalea/client/AzaleaDailyRewards/AzaleaDailyRewards.lua, actualizar tambien
+  goldRewards, los iconos y los textos visibles. Son informativos: el servidor
+  decide lo que se entrega. El prefijo de comunicacion AZ_DAILY_V1 debe coincidir
+  en cliente y servidor.
+- La tabla azalea_daily_reward_claim guarda GUID, dia de Madrid, dia de racha,
+  premio y hora UTC. La migracion esta en pending_db_characters. Esta tabla se
+  creo manualmente vacia en acore_characters; el actualizador no tiene registrada
+  la revision. CREATE TABLE IF NOT EXISTS permite repetir la creacion, pero se
+  debe coordinar el registro y comprobar el esquema antes de desplegar.
 
-### Trabajo pendiente antes de instalación
+### Instalacion y retirada
 
-1. Diseñar persistencia por personaje y entrega transaccional/recuperable que impida duplicar o
-   perder la recompensa si falla la base, el servidor se reinicia o se repite la petición.
-   `SendMail` de ALE confirma su correo en una transacción distinta a la escritura de la racha;
-   no usar ambas operaciones como si fueran atómicas. `CharDBExecute` puede ser asíncrono.
-2. Implementar la comunicación de addon con el evento de servidor ALE 30, autenticando el emisor
-   y usando solo mensajes y datos validados. El servidor deberá decidir día y recompensa.
-3. Preparar migración SQL siguiendo `AGENTS.md` y la política de actualizaciones, sin aplicarla
-   a la base activa; documentar instalación, rollback y reconciliación de errores.
-4. Integrar los importes acordados en el servicio y comprobar el limite de dinero y el inventario.
-   Si el premio supera el limite de dinero del personaje, rechazarlo sin consumir la reclamacion.
-5. Verificar cliente 3.3.5a, combinaciones de teclas, doble clic, simultaneidad, reinicios,
-   horario de verano, pérdida de día, día 14 repetible y errores de entrega en entorno aislado.
-6. Completar documentación en ambos idiomas y publicar la feature únicamente con su estado real.
+Publicar la rama revisada, integrarla en server conforme al procedimiento de
+Azalea Core y confirmar el montaje real de scripts ALE. Copiar deliberadamente
+solo azalea_daily_rewards.lua a la carpeta de scripts activa, conservando copia
+previa y teniendo en cuenta la recarga automatica. Copiar la carpeta
+AzaleaDailyRewards a Interface/AddOns del cliente y reiniciar el juego.
+No es necesario compilar C++ para este script Lua. Abrir con /diarias; Mayus+F12
+se asigna solo si esta libre. La demo /diariasdemo es independiente.
 
-### Pruebas de reglas ejecutadas
+Para retirar, quitar el script activo y el addon y reiniciar o recargar segun
+corresponda. Conservar la tabla para mantener el historial; borrar filas o la
+tabla reinicia el progreso y no revierte oro ni objetos entregados. Un rollback
+de imagen no revierte cambios SQL. No borrar datos sin respaldo.
 
-```bash
-luac -p azalea/client/AzaleaDailyRewards/AzaleaDailyRewards.lua
-luac -p azalea/daily-rewards/daily_logic.lua
-lua azalea/daily-rewards/tests/test_daily_logic.lua azalea/daily-rewards/daily_logic.lua
-```
+### Pruebas
 
-Las pruebas puras cubren primer día, misma jornada, avance, día 14 repetido, pérdida de racha,
-retroceso del reloj y límites de medianoche/cambios de hora. No prueban el cliente ni la entrega.
+test_tutorial_service.lua simula ALE y la base para primer dia, repeticion,
+limite, avance, orbe repetible y reinicio de racha. test_daily_logic.lua cubre
+calendario y cambio de horario. No son una prueba del cliente ni del servidor
+real, ni demuestran seguridad ante fallos. Probar tambien en entorno aislado y
+dentro del juego antes del despliegue.
 
 ## English
 
-**Status: incomplete. Do not install, merge into `server`, or use with live characters.** The
-client UI and pure calendar/streak rules exist; the authoritative backend, persistence and safe
-reward delivery are not implemented. The addon waits for a server response. No live server or
-client files were changed.
+**Development status:** tutorial under test; not integrated or deployed. The
+addon and ALE script award one claim per character per Madrid calendar day,
+including DST. Missing a day resets the streak. Days 1 to 13 award 5, 10, 20,
+50, 100, 200, 500, 1000, 2000, 3000, 5000, 10000 and 20000 gold. Day 14
+awards Frozen Orb 43102 and repeats while the streak continues. The server
+chooses rewards, rejects gold above 2147483646 copper and rejects an orb if
+there is no inventory space.
 
-Progress is per character and rolls over at Europe/Madrid midnight including DST. Days 1–13
-will award configurable money; day 14 awards Frozen Orb item 43102 and repeats while the streak
-continues. Missing a day resets the next reward to day 1. Shift+F12 is assigned only when unused;
-`/diarias` is an alternative. The service must reject a claim without consuming it if the reward would exceed the character money cap.
+### Tutorial limitations
 
-Before release, implement an authoritative server handler and persistence with crash-safe,
-duplicate-safe delivery. ALE `SendMail` and a separate streak update do not share a transaction;
-asynchronous `CharDBExecute` must not be treated as a synchronous commit. Provide migration,
-installation, rollback and reconciliation instructions, then test client behavior, concurrent
-claims, failures, restarts, calendar boundaries, full inventory and repeated day 14 in isolation.
+ALE changes the player's in-memory reward and CharDBExecute writes the claim
+asynchronously. These operations are NOT atomic. A database failure, Lua reload
+or restart before the character and claim are saved can lose a reward or claim,
+or allow a repeated reward. This is not a crash-safe economy system. The session
+cache prevents repeated clicks while the write is pending, but is lost on reload
+or restart.
 
-## Persistencia en desarrollo / Persistence in progress
+### Customization
 
-La migracion pendiente crea `azalea_daily_reward_claim`, con una clave unica por personaje
-y dia de Madrid. Se ha probado en MySQL 8.4 aislado que la migracion se puede ejecutar dos
-veces y que rechaza duplicados, conservando reclamaciones de otros personajes y dias.
-La tabla por si sola NO entrega premios: el registro y la entrega tienen que compartir
-una transaccion. No aplicar todavia a la base activa.
+Edit gold_rewards and the item ID/count in
+azalea/server/scripts/azalea_daily_rewards.lua. One gold is 10000 copper.
+The script contains its own calendar rules, with daily_logic.lua as the tested
+reference. Update goldRewards, icons and visible text in the client addon too:
+the client display is informational and the server chooses the actual reward.
+The AZ_DAILY_V1 message prefix must match on both sides.
 
-The pending migration creates a claim ledger keyed by character and Madrid day. Isolated
-MySQL 8.4 tests confirmed repeatable creation and duplicate rejection. The table alone
-does not deliver rewards: the claim and delivery must share a transaction. Do not apply
-the migration to the live database yet.
+The pending characters migration creates the claim ledger. Its empty table was
+manually created in live acore_characters and the updater has not recorded the
+revision. Inspect the schema and coordinate the idempotent migration with the
+updater before deployment.
+
+### Install, test and rollback
+
+Review and publish the feature, integrate into server using the Azalea workflow,
+check the actual ALE script mount, preserve any previous script and install only
+the intended script. ALE auto-reload can apply it immediately. Copy the addon
+folder to Interface/AddOns and restart the game. No C++ rebuild is needed for
+this Lua script. Open with /diarias; Shift+F12 is assigned only if free.
+The /diariasdemo addon is separate.
+
+Remove the active script and addon to disable; retain the table to preserve
+history. Deleting rows or the table resets progress but does not undo rewards.
+Image rollback does not undo SQL. Back up before deleting data.
+
+The Lua tests simulate ALE and the database, including repeated claims, the
+money cap, streaks and the repeating orb. Calendar tests cover DST. They do not
+test real client/server behavior or crash safety; test in isolation and in game
+before deployment.
