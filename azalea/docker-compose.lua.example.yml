@@ -1,0 +1,6 @@
+services:
+  ac-worldserver:
+    environment:
+      AC_ALE_AUTO_RELOAD_INTERVAL: "1"
+    volumes:
+      - ./lua_scripts:/azerothcore/env/dist/bin/lua_scripts
