@@ -70,3 +70,16 @@ duplicate-safe delivery. ALE `SendMail` and a separate streak update do not shar
 asynchronous `CharDBExecute` must not be treated as a synchronous commit. Provide migration,
 installation, rollback and reconciliation instructions, then test client behavior, concurrent
 claims, failures, restarts, calendar boundaries, full inventory and repeated day 14 in isolation.
+
+## Persistencia en desarrollo / Persistence in progress
+
+La migracion pendiente crea `azalea_daily_reward_claim`, con una clave unica por personaje
+y dia de Madrid. Se ha probado en MySQL 8.4 aislado que la migracion se puede ejecutar dos
+veces y que rechaza duplicados, conservando reclamaciones de otros personajes y dias.
+La tabla por si sola NO entrega premios: el registro y la entrega tienen que compartir
+una transaccion. No aplicar todavia a la base activa.
+
+The pending migration creates a claim ledger keyed by character and Madrid day. Isolated
+MySQL 8.4 tests confirmed repeatable creation and duplicate rejection. The table alone
+does not deliver rewards: the claim and delivery must share a transaction. Do not apply
+the migration to the live database yet.
