@@ -106,7 +106,8 @@ events:RegisterEvent('CHAT_MSG_ADDON')
 events:SetScript('OnEvent', function(_, event, ...)
   if event == 'PLAYER_LOGIN' then
     -- Do not overwrite an existing binding or a previously chosen addon binding.
-    if not GetBindingKey('AZALEA_DAILY_REWARDS') and not GetBindingAction('SHIFT-F12') then
+    local existingAction = GetBindingAction('SHIFT-F12')
+    if not GetBindingKey('AZALEA_DAILY_REWARDS') and (not existingAction or existingAction == '') then
       SetBinding('SHIFT-F12', 'AZALEA_DAILY_REWARDS')
       SaveBindings(GetCurrentBindingSet())
     end
