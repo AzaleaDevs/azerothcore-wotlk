@@ -5,6 +5,8 @@ BINDING_NAME_AZALEA_DAILY_REWARDS = 'Abrir recompensas diarias'
 local PREFIX = 'AZ_DAILY_V1'
 local MONEY_ICON = 'Interface\\Icons\\INV_Misc_Coin_01'
 local ORB_ICON = 'Interface\\Icons\\Spell_Frost_FrozenCore'
+-- Display only: the server is authoritative for actual rewards.
+local goldRewards = { 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 3000, 5000, 10000, 20000 }
 local state = { day = 1, claimed = false, ready = false, error = nil }
 local cells = {}
 
@@ -72,7 +74,7 @@ for day = 1, 14 do
   icon:SetTexture(day == 14 and ORB_ICON or MONEY_ICON)
   local reward = cell:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightSmall')
   reward:SetPoint('TOP', icon, 'BOTTOM', 0, -6)
-  reward:SetText(day == 14 and 'Orbe congelado' or 'Dinero')
+  reward:SetText(day == 14 and 'Orbe congelado' or (goldRewards[day] .. ' oro'))
   local button = CreateFrame('Button', nil, cell, 'UIPanelButtonTemplate')
   button:SetSize(80, 23)
   button:SetPoint('TOP', reward, 'BOTTOM', 0, -8)

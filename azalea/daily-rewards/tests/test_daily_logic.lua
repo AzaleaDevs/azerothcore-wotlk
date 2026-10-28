@@ -22,4 +22,13 @@ equal(logic.madrid_day(1767221999) + 1, logic.madrid_day(1767222000), 'winter mi
 equal(logic.madrid_day(1782856799) + 1, logic.madrid_day(1782856800), 'summer midnight')
 equal(logic.madrid_day(1774745999), logic.madrid_day(1774746000), 'spring clock change same day')
 equal(logic.madrid_day(1792899599), logic.madrid_day(1792899600), 'autumn clock change same day')
+local expected_gold = { 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 3000, 5000, 10000, 20000 }
+for i, gold in ipairs(expected_gold) do
+  local kind, amount = logic.reward(i)
+  equal(kind, 'money', 'money reward type day ' .. i)
+  equal(amount, gold * 10000, 'money reward amount day ' .. i)
+end
+local kind, item, quantity = logic.reward(14)
+equal(kind, 'item', 'final reward type'); equal(item, 43102, 'frozen orb'); equal(quantity, 1, 'orb quantity')
+assert(not pcall(logic.reward, 0) and not pcall(logic.reward, 15), 'invalid days rejected')
 print('daily reward rules: ok')

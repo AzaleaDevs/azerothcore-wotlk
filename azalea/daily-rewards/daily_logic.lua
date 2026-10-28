@@ -1,6 +1,14 @@
 -- Pure daily-reward rules. Timestamps are UTC seconds; the day boundary is Europe/Madrid.
 local DailyRewards = {}
 
+-- Gold amounts for days 1?13; day 14 is one Frozen Orb (item 43102).
+local gold_rewards = { 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 3000, 5000, 10000, 20000 }
+function DailyRewards.reward(day)
+  assert(type(day) == 'number' and day == math.floor(day) and day >= 1 and day <= 14, 'invalid reward day')
+  if day == 14 then return 'item', 43102, 1 end
+  return 'money', gold_rewards[day] * 10000 -- copper
+end
+
 local function day_number(year, month, day)
   if month <= 2 then year = year - 1 end
   local era = math.floor(year / 400)
