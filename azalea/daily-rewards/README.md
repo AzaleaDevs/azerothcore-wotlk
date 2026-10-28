@@ -184,7 +184,8 @@ PowerShell. Omite la clonación si ya tienes la carpeta y no la sobrescribas:
 ```powershell
 git clone https://github.com/AzaleaDevs/AzaleaCore-MPQ-Studio.git 'D:\AzaleaDevs\AzaleaCore-MPQ-Studio'
 Set-Location 'D:\AzaleaDevs\AzaleaCore-MPQ-Studio'
-py -3.11 -m venv .venv
+py -3 --version  # Debe mostrar Python 3.11 o superior.
+py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
 ```
 
