@@ -1,0 +1,6 @@
+## Interface: 30300
+## Title: Azalea | Recompensas diarias
+## Notes: Calendario de recompensas diarias de Azalea Core
+## Author: Azalea Core
+Bindings.xml
+AzaleaDailyRewards.lua

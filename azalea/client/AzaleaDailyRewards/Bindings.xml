@@ -1,0 +1,5 @@
+<Bindings>
+  <Binding name="AZALEA_DAILY_REWARDS" header="AZALEA_DAILY_REWARDS_HEADER">
+    AzaleaDailyRewards_Toggle()
+  </Binding>
+</Bindings>
