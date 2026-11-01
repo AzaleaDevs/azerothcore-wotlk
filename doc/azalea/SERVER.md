@@ -2,22 +2,24 @@
 
 ## Español
 
-Esta rama integra la base Lua y las features aceptadas. Inicialmente incluye `feature/login-greetings`,
-con sus saludos de Lua y C++. La reorganización añade documentación y configuración reproducible,
-sin modificar el comportamiento del código de saludos.
+Esta rama es lo que corre en la Raspberry: `base/lua` más las features mergeadas. El flujo para
+añadir, desplegar y recuperar features está en `doc/azalea/PROCEDIMIENTO-AZALEA-CORE.md`.
 
-**Estado tras los pasos 1 y 2:** ramas preparadas; Docker sigue ejecutando su imagen previa basada
-en `d5695da75713`. Todavía NO se ha compilado ni desplegado esta rama. La preparación de caché,
-compilación y despliegue corresponde a los siguientes pasos autorizados por separado.
+**Estado (2026-11-01):**
 
-Mantener la carpeta activa hasta preparar el despliegue separado. Los worktrees de desarrollo no
-son despliegues. Registrar el commit y la imagen de cada publicación, y respaldar las bases antes
-de migraciones. Validar los saludos dentro del juego después del despliegue.
+| Feature | Estado |
+| --- | --- |
+| `feature/login-greetings` | Integrada y desplegada. Saludos en Lua y C++ verificados en el juego. |
+| `feature/daily-rewards` | Descartada. Se retiró de `server`, junto con su script Lua y su tabla. |
+
+Imágenes desplegadas: revisión `08a612db1c98` (`server-08a612db1c98`). Los commits posteriores de
+`server` solo cambian documentación.
 
 ## English
 
-This branch integrates the pinned Lua baseline and accepted features, initially login greetings.
-Steps 1 and 2 only prepare branches and documentation. Docker still runs the prior image built
-from `d5695da75713`; this branch has NOT been built or deployed yet. Persistent build caches and
-deployment are separate next steps. Worktrees are not deployments. Record commit/image per release,
-back up databases before migrations, and verify both greetings in game after deployment.
+This branch is what runs on the Raspberry: `base/lua` plus merged features. See
+`doc/azalea/PROCEDIMIENTO-AZALEA-CORE.md` for the feature, deployment and recovery workflow.
+
+Status (2026-11-01): `feature/login-greetings` is integrated, deployed and verified in game.
+`feature/daily-rewards` was discarded and removed from `server` together with its Lua script and
+table. Deployed images are revision `08a612db1c98`; later `server` commits are documentation only.

@@ -1,105 +1,150 @@
 # Procedimiento de Azalea Core / Azalea Core workflow
 
+Versión 3 (2026-11-01).
+
 ## Español
 
-### Ramas y carpetas
+### Ramas
 
-`master` conserva el core de referencia; `base/lua` añade la integración reproducible de ALE;
-`feature/<nombre>` contiene cada tutorial con sus commits y documentación; `server` reúne la base
-y las features aprobadas. Cada feature se conserva y publica para que pueda consultarse por separado.
+| Rama | Función |
+| --- | --- |
+| `master` | Core de AzerothCore de referencia. No se trabaja sobre ella. |
+| `base/lua` | AzerothCore + ALE fijado. Es el punto de partida de toda feature y el estado al que volver. |
+| `feature/<nombre>` | Una rama por tutorial. Muestra a la gente qué código cambia. Se publica siempre. |
+| `server` | Lo que corre en la Raspberry: `base/lua` + las features mergeadas. |
+
 ALE es un repositorio externo: `azalea/modules.lock.json` fija su revisión y
-`azalea/scripts/bootstrap-ale.sh` instala y valida esa revisión.
+`azalea/scripts/bootstrap-ale.sh` la instala y la valida.
 
-La instalación activa `/home/azalea/docker/Warcraft/azerothcore-wotlk` contiene la configuración,
-datos y scripts montados por Docker. No cambiar su rama ni usarla para desarrollar. Los worktrees
-están en `/home/azalea/docker/Warcraft/branch-worktrees/`; el contexto independiente de compilación
-está en `/home/azalea/docker/Warcraft/build-contexts/server`.
+**Lo importante de una feature es su diff de código respecto a `base/lua`**
+(`git diff origin/base/lua...origin/feature/<nombre>`), que es lo que verá la gente. El número de
+commits y su historial no importan, siempre que el diff sea limpio y solo contenga la feature.
 
-### Crear y desarrollar una feature
+**Las features no dependen unas de otras.** Todas parten de `base/lua`. Si una parece necesitar otra,
+se avisa antes de empezar y se diseña para que sea independiente.
 
-1. Comprobar el estado Git, actualizar las referencias y partir de la revisión publicada de
-   `base/lua`. Crear una rama y un worktree con un nombre concreto, sin sobrescribir carpetas:
+### Carpetas en la Raspberry
+
+- Instalación activa: `/home/azalea/docker/Warcraft/azerothcore-wotlk`. Contiene `docker-compose.yml`,
+  `docker-compose.override.yml`, configuración, datos y `lua_scripts/`. Está en un HEAD separado: **no
+  cambiar su rama ni desarrollar en ella**.
+- Worktrees: `/home/azalea/docker/Warcraft/branch-worktrees/` (`master`, `base-lua`, `server` y uno
+  por feature).
+- Contexto de compilación independiente: `/home/azalea/docker/Warcraft/build-contexts/server`.
+
+### Docker compose
+
+Es el `docker-compose.yml` estándar de AzerothCore, igual que en `base/lua`. El
+`docker-compose.override.yml` monta `./lua_scripts` en el worldserver y activa
+`AC_ALE_AUTO_RELOAD_INTERVAL=1`. Servicios: `ac-database` (MySQL 8.4), `ac-db-import`,
+`ac-worldserver`, `ac-authserver` y `ac-client-data-init`.
+
+- **El SQL lo aplica `ac-db-import`, no `ac-database`.** Su imagen copia `data/` al construirse y
+  aplica el SQL de `data/sql/updates/pending_db_*/` que lleva dentro; se ejecuta una vez y termina con
+  `Exited (0)`. No hace falta reiniciar MySQL: hay que reconstruir la imagen de `db-import` desde
+  `server` y lanzarla antes de recrear el worldserver.
+- `docker compose up -d --build` en la instalación activa compilaría su HEAD separado, no `server`.
+  Por eso se compila desde `server` y las imágenes se etiquetan con los nombres que usa el compose
+  (`acore/ac-wotlk-*:master`). Esa etiqueta `master` es solo un nombre de imagen, no la rama.
+- El Lua en ejecución se monta desde `lua_scripts/` de la instalación activa, no desde la imagen.
+  Con la recarga automática, los cambios se aplican al momento.
+
+### Flujo de una feature
+
+1. **Crear la rama y el worktree** desde la revisión publicada de `base/lua`:
 
    ```bash
    git -C /home/azalea/docker/Warcraft/branch-worktrees/base-lua fetch origin
-   git -C /home/azalea/docker/Warcraft/branch-worktrees/base-lua status --short
    git -C /home/azalea/docker/Warcraft/branch-worktrees/base-lua worktree add \
      -b feature/mi-feature /home/azalea/docker/Warcraft/branch-worktrees/mi-feature origin/base/lua
    cd /home/azalea/docker/Warcraft/branch-worktrees/mi-feature
    bash azalea/scripts/bootstrap-ale.sh
+   git push -u origin feature/mi-feature
    ```
 
-2. Desarrollar y probar la funcionalidad en su worktree, respetando `AGENTS.md` y las instrucciones
-   que referencia. No publicar credenciales, configuraciones privadas ni datos de las bases.
-3. Documentar en español e inglés: funcionamiento, instalación, cambios de cliente y servidor,
-   SQL y su orden, pruebas, compatibilidad, dependencias y recuperación. Indicar expresamente
-   cuando no hay cambios de cliente o SQL. Explicar cómo desactivar o revertir la feature y las
-   consecuencias para datos existentes.
-4. Revisar cambios, ejecutar las pruebas pertinentes, registrar sus resultados y crear commits.
-   Publicar y conservar la rama `feature/mi-feature` y sus commits.
-
-Si una feature depende de otra, documentar la dependencia y los commits concretos. Desarrollarla
-sobre la rama dependiente cuando sea necesario y no presentarla como independiente. Integrar primero
-la dependencia aprobada en `server`; después fusionar la feature dependiente y resolver conflictos.
-No retirar las ramas ni reescribir su historial publicado sin coordinación.
-
-### Integración, compilación y despliegue
-
-1. Verificar que la feature está aprobada, documentada y probada, y que `server` está limpio.
-   En el worktree `server`, actualizar sus referencias y fusionar la rama aprobada:
+2. **Desarrollar** en el worktree, respetando `AGENTS.md` y las instrucciones que referencia. Lua de
+   servidor en `lua_scripts/`, C++ si hace falta, SQL solo en `data/sql/updates/pending_db_*/` (ver
+   reglas del SQL). Cliente: código en `azalea/client/<Feature>MPQ/`. Publicar la rama.
+3. **Validar que se puede probar**, sin tocar el servidor: tests de `azalea/<feature>/tests/`,
+   sintaxis de Lua, revisión del SQL y, si hay C++, compilación con la caché. Solo pasa a `server`
+   lo que está validado.
+4. **Pasar a `server`:**
 
    ```bash
    cd /home/azalea/docker/Warcraft/branch-worktrees/server
    git fetch origin
    git status --short
    git merge --no-ff origin/feature/mi-feature
+   git push origin server
    ```
 
-   Revisar el resultado, resolver conflictos, probar de nuevo y publicar `server` cuando proceda.
-   No continuar si hay cambios inesperados o pruebas fallidas.
-2. Examinar SQL y cambios de cliente. Si hay migraciones o datos incompatibles, preparar un respaldo
-   reciente y un plan específico de reversión antes de aplicarlos. Volver a una imagen antigua no
-   deshace migraciones. Coordinar el reinicio con quienes usen el servidor.
-3. Preparar y compilar desde `server`, limpio y con ALE fijado:
+   No continuar si hay conflictos sin resolver o cambios inesperados.
+5. **Desplegar** `server` (ver "Despliegue").
+6. **Prueba del usuario en el servidor.** Sin visto bueno no se hace documentación ni guion: se
+   corrige en la feature, se valida y se vuelve a pasar a `server` (pasos 3 a 5).
+7. **Con el visto bueno:** README en español e inglés (`azalea/<feature>/README.md` y
+   `doc/azalea/features/<feature>.md`) y MPQ de descarga si hay cambios de cliente
+   (`azalea/<feature>/dist/`, con `.gitattributes` para conservar sus bytes). Se publican en la
+   feature y se mergean de nuevo en `server`. Si solo cambian docs o MPQ, no hace falta redesplegar.
+
+### Reglas del SQL de una feature
+
+- Solo en `data/sql/updates/pending_db_<base>/`. Tablas propias con prefijo `azalea_`
+  (`azalea_<feature>_…`). No modificar ni borrar tablas del core.
+- **Idempotente**, para que relanzarlo no falle ni duplique datos:
+  - `CREATE TABLE IF NOT EXISTS`.
+  - Columnas o índices nuevos solo tras comprobar en `information_schema` que no existen.
+  - Datos con claves explícitas: `DELETE … WHERE` + `INSERT`, o `INSERT … ON DUPLICATE KEY UPDATE`.
+- Antes de aplicarlo, comprobar si las tablas ya existen y con qué estructura; después, que se han
+  creado y que `ac-db-import` terminó con código 0.
+- Cada feature con SQL lleva `azalea/<feature>/sql/uninstall.sql`, fuera de `pending_*` para que no
+  se aplique solo, para desactivarla o descartarla.
+- **Backup de las tablas afectadas antes de aplicar SQL.** Volver a una imagen anterior no deshace
+  el SQL.
+
+### Despliegue
+
+1. Preparar y compilar desde `server`, limpio y con ALE fijado (ver `doc/azalea/BUILD.md`):
 
    ```bash
    cd /home/azalea/docker/Warcraft/branch-worktrees/server
    bash azalea/scripts/build-server-cache.sh
    ```
 
-   El script prepara el clon independiente y compila con BuildKit, ccache y objetos Ninja
-   persistentes. La salida predeterminada es `cacheonly`: **no crea imágenes de ejecución**.
-   Las cachés pueden ser eliminadas por Docker; si falta una, la siguiente compilación reconstruye
-   lo necesario. Evitar `--no-cache` salvo diagnóstico justificado. Véase `doc/azalea/BUILD.md`.
-4. Construir las imágenes desde el contexto preparado, usando el commit real y una etiqueta nueva:
+2. Construir las imágenes con el commit real y una etiqueta nueva. `db-import` solo es necesaria si
+   hay SQL nuevo, pero construirla siempre no hace daño:
 
    ```bash
    revision=$(git rev-parse HEAD)
    corto=$(git rev-parse --short=12 HEAD)
    contexto=/home/azalea/docker/Warcraft/build-contexts/server
-   docker buildx build --file "$contexto/apps/docker/Dockerfile" \
-     --build-arg "CACHEBUST=$revision" --target worldserver \
-     --tag "azalea-core/worldserver:server-$corto" --load "$contexto"
-   docker buildx build --file "$contexto/apps/docker/Dockerfile" \
-     --build-arg "CACHEBUST=$revision" --target authserver \
-     --tag "azalea-core/authserver:server-$corto" --load "$contexto"
+   for target in worldserver authserver db-import; do
+     docker buildx build --file "$contexto/apps/docker/Dockerfile" \
+       --build-arg "CACHEBUST=$revision" --target "$target" \
+       --tag "azalea-core/$target:server-$corto" --load "$contexto"
+   done
    docker run --rm --entrypoint /azerothcore/env/dist/bin/worldserver \
      "azalea-core/worldserver:server-$corto" --version
-   docker run --rm --entrypoint /azerothcore/env/dist/bin/authserver \
-     "azalea-core/authserver:server-$corto" --version
    ```
 
-   Confirmar revisión y rama de ambos binarios, IDs de imágenes y módulo ALE. El signo `+` de
-   la versión indica que Git detectó diferencias en el contexto de compilación: investigar su
-   causa antes de atribuir el binario a un commit limpio. No asumir que `--version` basta para
-   certificar todo el contenido.
-5. El Lua en ejecución se monta desde la instalación activa, no desde la imagen ni automáticamente
-   desde `server`. Comparar los scripts activos con los aprobados, preservar una copia y aplicar
-   deliberadamente los cambios necesarios. La recarga automática puede hacerlos efectivos de
-   inmediato: coordinar este paso y prever la reversión. No reemplazar scripts ajenos a la feature.
-6. Registrar los IDs y etiquetas actuales, conservar etiquetas de recuperación y comprobar que
-   apuntan a las imágenes correctas. Con las imágenes y scripts verificados, etiquetar las nuevas
-   imágenes con los nombres que utiliza Compose y recrear solo los servicios necesarios:
+   El signo `+` en la versión indica que Git detectó diferencias en el contexto de compilación:
+   investigarlo antes de atribuir el binario a un commit limpio.
+3. Guardar la recuperación: etiquetar las imágenes que corren ahora como
+   `azalea-core/<servicio>:pre-<feature>-<fecha>` y anotar sus IDs. Si hay SQL, hacer backup de las
+   tablas afectadas. Copiar los scripts Lua activos que se vayan a cambiar.
+4. Aplicar el SQL, si lo hay:
+
+   ```bash
+   docker tag "azalea-core/db-import:server-$corto" acore/ac-wotlk-db-import:master
+   cd /home/azalea/docker/Warcraft/azerothcore-wotlk
+   docker compose up --no-deps --no-build --force-recreate \
+     --exit-code-from ac-db-import ac-db-import
+   ```
+
+   Debe terminar con código 0. Comprobar que las tablas existen.
+5. Copiar a `lua_scripts/` de la instalación activa solo los scripts de la feature que vienen de
+   `server`. No reemplazar scripts ajenos a la feature.
+6. Etiquetar y recrear el worldserver y el authserver:
 
    ```bash
    docker tag "azalea-core/worldserver:server-$corto" acore/ac-wotlk-worldserver:master
@@ -108,82 +153,80 @@ No retirar las ramas ni reescribir su historial publicado sin coordinación.
    docker compose up -d --no-deps --no-build ac-worldserver ac-authserver
    ```
 
-   La etiqueta `master` de estas imágenes es la que usa el Compose actual; no significa que se
-   compile desde la rama Git `master`. Evitar `--build` en la instalación activa. Si la configuración
-   de Compose cambia, comprobar primero los nombres reales con `docker compose config --images`.
-7. Comprobar imágenes realmente ejecutadas, arranque completo y revisión en logs, conexiones a
-   las tres bases, ALE y scripts, puertos y errores. Probar en el juego los comportamientos afectados
-   y anotar resultado, fecha, commit e IDs de imágenes. Un contenedor `Up` no equivale a mundo listo.
+   Si cambia la configuración del compose, comprobar antes los nombres con
+   `docker compose config --images`.
+7. Verificar: imágenes en ejecución, worldserver en `ready`, revisión en los logs, conexión a las tres
+   bases, ALE y scripts cargados, sin errores. Anotar commit, IDs de imágenes y resultado. Un
+   contenedor `Up` no equivale a mundo listo.
 
 ### Recuperación
 
-Para volver a la versión anterior, identificar sus etiquetas e IDs registrados, revisar scripts y
-configuración, y volver a etiquetar las imágenes anteriores con los nombres que usa Compose antes
-de recrear los servicios. Verificar que arrancan y probar dentro del juego. Si hubo SQL o cambios de
-datos, evaluar su compatibilidad y el plan de recuperación específico antes de volver atrás. La
-recuperación histórica está documentada en
-`/home/azalea/backups/azalea-core/pre-branches-20261028/RECUPERACION.md`; contiene información privada.
+- **Volver a la versión anterior:** volver a etiquetar las imágenes `pre-<feature>-<fecha>` con los
+  nombres del compose, restaurar los scripts Lua copiados y recrear `ac-worldserver` y
+  `ac-authserver`. Si hubo SQL, aplicar `uninstall.sql` o restaurar el backup de las tablas.
+- **Descartar una feature ya mergeada:** sacar su merge de `server` (revert del merge, o reset del
+  commit anterior con force push si se acuerda), aplicar su `uninstall.sql`, quitar sus scripts Lua
+  y redesplegar. Hacer antes un backup privado (bundle de git, Lua y volcado de las tablas).
+- La recuperación histórica y los respaldos están en `/home/azalea/backups/azalea-core/`. Contienen
+  información privada: no publicarlos.
 
-### Instrucción reutilizable para Codex
+### Instrucción reutilizable
 
 ```text
-Implementa la feature <nombre y comportamiento> para Azalea Core. Lee AGENTS.md y sus
-instrucciones aplicables. Crea una rama feature/<nombre> desde base/lua y un worktree separado;
-conserva sus commits. ALE se instala desde el lock y el bootstrap del repositorio. Indica cualquier
-dependencia de otra feature antes de integrarla. Desarrolla y prueba sin modificar la instalación
-activa. Documenta en español e inglés funcionamiento, instalación, cambios de cliente y servidor,
-SQL, dependencias, pruebas y recuperación, indicando lo que no aplica. Revisa y publica la rama.
-Tras mi aprobación, fusiona en server, compila con la caché preparada, verifica imagen y scripts,
-despliega conservando recuperación y comprueba arranque, bases, ALE y comportamiento. Indica el
-commit, las imágenes, las pruebas realizadas y lo que debo comprobar en el juego.
+Implementa la feature <nombre y comportamiento> para Azalea Core. Lee AGENTS.md y sus instrucciones.
+Crea feature/<nombre> desde base/lua en un worktree separado y publícala; el diff respecto a base/lua
+debe mostrar limpio lo que cambia. Debe ser independiente de otras features. El SQL va solo en
+pending_db_*, con tablas azalea_, idempotente y con uninstall.sql. Valida que se puede probar,
+mergea en server, haz push y despliega (db-import si hay SQL, backup antes, recuperación guardada).
+Verifica arranque, bases, ALE y logs, y dame los casos de prueba. Con mi visto bueno, añade README
+en español e inglés y el MPQ si hay cambios de cliente, y vuelve a mergear en server.
 ```
 
 ## English
 
-### Branches and development
+### Branches
 
-`master` is the reference core; `base/lua` provides the pinned, reproducible ALE integration;
-`feature/<name>` preserves each tutorial's changes and commits; `server` contains approved features.
-Keep feature branches published. ALE is external: install and verify the revision in
-`azalea/modules.lock.json` with `bash azalea/scripts/bootstrap-ale.sh`.
+`master` is the reference core and is not worked on. `base/lua` is AzerothCore plus pinned ALE: every
+feature starts from it. `feature/<name>` holds one tutorial and is always published; what matters is
+its code diff against `base/lua` (`git diff origin/base/lua...origin/feature/<name>`), not its commit
+history. `server` is what runs on the Raspberry: `base/lua` plus merged features. Features must not
+depend on each other.
 
-Create a separate worktree and feature branch from the published `origin/base/lua` as shown above.
-Read `AGENTS.md` and its referenced instructions, develop and test there, and do not use the live
-installation for development. Document behavior, installation, client and server changes, SQL,
-dependencies, tests, compatibility and recovery in both languages; explicitly mark non-applicable
-items. Never commit secrets or private database data.
+### Docker compose
 
-For dependent features, record the prerequisite and its commits. Develop on that feature when
-necessary, merge approved prerequisites into `server` first, and preserve both branch histories.
+The live installation uses the stock AzerothCore `docker-compose.yml` (same as `base/lua`) plus an
+override that mounts `./lua_scripts` and sets `AC_ALE_AUTO_RELOAD_INTERVAL=1`. SQL is applied by
+`ac-db-import`, whose image bakes in `data/` and runs once: rebuild it from `server` and run it before
+recreating the worldserver; MySQL does not need a restart. `docker compose up --build` in the live
+folder would build its detached HEAD, not `server`, so images are built from `server` and tagged
+with the compose names. Live Lua is mounted from the live `lua_scripts/`.
 
-### Release and recovery
+### Feature flow
 
-Review and test the approved feature, merge it into a clean `server` worktree, resolve conflicts,
-test again and publish. Review SQL and client implications; make a current backup and a specific
-rollback plan before migrations when needed. Build with `azalea/scripts/build-server-cache.sh`;
-its default output only populates the cache. Build and tag the worldserver and authserver runtime
-images using the commands above and verify their revisions and IDs. Investigate a `+` revision
-marker before claiming a clean build.
+Create `feature/<name>` and its worktree from `origin/base/lua`, bootstrap ALE and publish it. Develop
+following `AGENTS.md`. Validate without touching the server (tests, Lua syntax, SQL review, C++ cache
+build). Merge into `server`, push and deploy. The user tests on the server; without approval, fix on
+the feature and repeat. After approval, add the Spanish/English README and the client MPQ if needed,
+publish them on the feature and merge into `server` again (no redeploy for docs/MPQ only).
 
-Docker mounts Lua scripts from the live installation; compare, back up and deliberately update
-the approved scripts, accounting for automatic reload. Preserve previous images and record their
-IDs. Tag the new images with the names used by the active Compose configuration, then recreate
-only worldserver/authserver with `--no-deps --no-build`. Verify full startup, revision, databases,
-ALE, logs, and in-game behavior. Record commit, image IDs and test results.
+### SQL rules
 
-For rollback, restore the recorded prior image tags and appropriate scripts/configuration, recreate
-the services and verify them. Image rollback does not undo SQL migrations. Consult the private
-recovery document at the Raspberry backup path above when database recovery is required.
+Only in `pending_db_*`, using `azalea_`-prefixed tables and never altering core tables. SQL must be
+idempotent (`CREATE TABLE IF NOT EXISTS`, `information_schema` checks, explicit keys with
+`DELETE`+`INSERT` or `ON DUPLICATE KEY UPDATE`). Check tables before and after, ship an
+`uninstall.sql` outside `pending_*`, and back up affected tables first: an image rollback does not
+undo SQL.
 
-### Reusable Codex request
+### Deployment and recovery
 
-```text
-Implement <feature and behavior> for Azalea Core. Read AGENTS.md and applicable instructions.
-Create feature/<name> from base/lua in a separate worktree, preserve its commits, and install ALE
-using the pinned lock and bootstrap. Identify feature dependencies. Develop and test without editing
-the live installation. Document behavior, installation, client/server changes, SQL, dependencies,
-tests and recovery in Spanish and English, including non-applicable items. Review and publish the
-feature branch. After my approval, merge into server, build with the prepared cache, verify images
-and mounted scripts, deploy with rollback preserved, and check startup, databases, ALE and behavior.
-Report the commit, images, tests and anything I must verify in game.
-```
+Run `azalea/scripts/build-server-cache.sh` from `server`, build `worldserver`, `authserver` and
+`db-import` images tagged `server-<short>`, and investigate any `+` revision marker. Tag the running
+images as `pre-<feature>-<date>`, back up affected tables and Lua, run `ac-db-import` with
+`--exit-code-from` when there is SQL, copy only the feature's Lua scripts, then retag and recreate
+`ac-worldserver` and `ac-authserver` with `--no-deps --no-build`. Verify readiness, revision,
+databases, ALE and logs, and record commit and image IDs.
+
+To roll back, retag the `pre-*` images, restore Lua and recreate the services; undo SQL with
+`uninstall.sql` or the table backup. To discard a merged feature, take a private backup, remove its
+merge from `server`, apply `uninstall.sql`, remove its Lua and redeploy. Private backups live in
+`/home/azalea/backups/azalea-core/` and must never be published.
